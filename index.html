@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Stock Forecast Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body style="font-family: Arial; padding:20px">
+  <h2>📈 Grafik History + Prediksi</h2>
+
+  <label>Pilih saham: </label>
+  <select id="symbol">
+    <option value="BBCA">BBCA</option>
+    <option value="BBRI">BBRI</option>
+    <option value="BBNI">BBNI</option>
+    <option value="BMRI">BMRI</option>
+  </select>
+
+  <button onclick="loadChart()">Tampilkan</button>
+
+  <p id="status"></p>
+  <canvas id="chart" height="100"></canvas>
+
+<script>
+const API_BASE = "https://prediksiregresi-production.up.railway.app"; // ganti kalau beda
+
+async function loadChart() {
+  const status = document.getElementById("status");
+  status.innerText = "Loading data...";
+
+  const symbol = document.getElementById("symbol").value;
+
+  const history = await fetch(`${API_BASE}/history/${symbol}`).then(r => r.json());
+  const prediction = await fetch(`${API_BASE}/predict/${symbol}`).then(r => r.json());
+
+  if (history.error) { status.innerText = "Error history: " + history.error; return; }
+  if (prediction.error) { status.innerText = "Error predict: " + prediction.error; return; }
+
+  const histDates = history.dates;
+  const histPrices = history.close;
+
+  const predDates = prediction.predictions.map(p => p.date);
+  const predPrices = prediction.predictions.map(p => p.predicted_close);
+
+  const labels = [...histDates, ...predDates];
+
+  // data prediksi dibuat null dulu sepanjang history, lalu isi prediksi
+  const predSeries = [...Array(histPrices.length).fill(null), ...predPrices];
+
+  const ctx = document.getElementById("chart").getContext("2d");
+  if (window.myChart) window.myChart.destroy();
+
+  window.myChart = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: "History / Actual",
+          data: histPrices,
+          borderColor: "blue",
+          tension: 0.2,
+          pointRadius: 0
+        },
+        {
+          label: "Prediction (next trading days)",
+          data: predSeries,
+          borderColor: "red",
+          borderDash: [6,6],
+          tension: 0.2,
+          pointRadius: 0
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      interaction: { intersect: false, mode: "index" }
+    }
+  });
+
+  status.innerText = `Selesai. (${symbol})`;
+}
+
+loadChart();
+
+// Auto refresh tiap 15 menit (real-time versi sederhana)
+setInterval(loadChart, 15 * 60 * 1000);
+</script>
+</body>
+</html>
