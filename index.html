@@ -7,7 +7,7 @@
 </head>
 
 <body style="font-family: Arial; padding:20px">
-  <h2>📈 Grafik History + Prediksi</h2>
+  <h2>Grafik History dan Prediksi Saham</h2>
 
   <label>Pilih saham: </label>
   <select id="symbol">
@@ -70,7 +70,7 @@ async function loadChart() {
     options: { responsive: true, interaction: { intersect: false, mode: "index" } }
   });
 
-  status.innerText = `Selesai. (${symbol}) | Hist: ${histPrices.length} hari | Pred: ${predPrices.length} hari`;
+  status.innerText = `Kode (${symbol}) | History: ${histPrices.length} hari | Prediksi: ${predPrices.length} hari`;
 }
 
 loadChart();
