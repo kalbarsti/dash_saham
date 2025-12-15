@@ -20,10 +20,17 @@
   <button onclick="loadChart()">Tampilkan</button>
 
   <p id="status"></p>
-  <canvas id="chart" height="100"></canvas>
+  <canvas id="chart" height="110"></canvas>
 
 <script>
-const API_BASE = "https://prediksiregresi-production.up.railway.app"; // ganti kalau beda
+const API_BASE = "https://prediksiregresi-production.up.railway.app";
+
+async function safeFetch(url) {
+  const r = await fetch(url);
+  const text = await r.text();
+  try { return JSON.parse(text); }
+  catch { return { error: "Response bukan JSON: " + text.slice(0, 200) }; }
+}
 
 async function loadChart() {
   const status = document.getElementById("status");
@@ -31,8 +38,8 @@ async function loadChart() {
 
   const symbol = document.getElementById("symbol").value;
 
-  const history = await fetch(`${API_BASE}/history/${symbol}`).then(r => r.json());
-  const prediction = await fetch(`${API_BASE}/predict/${symbol}`).then(r => r.json());
+  const history = await safeFetch(`${API_BASE}/history/${symbol}`);
+  const prediction = await safeFetch(`${API_BASE}/predict/${symbol}`);
 
   if (history.error) { status.innerText = "Error history: " + history.error; return; }
   if (prediction.error) { status.innerText = "Error predict: " + prediction.error; return; }
@@ -45,8 +52,8 @@ async function loadChart() {
 
   const labels = [...histDates, ...predDates];
 
-  // data prediksi dibuat null dulu sepanjang history, lalu isi prediksi
-  const predSeries = [...Array(histPrices.length).fill(null), ...predPrices];
+  const histSeries = [...histPrices, ...Array(predPrices.length).fill(null)];
+  const predSeries  = [...Array(histPrices.length).fill(null), ...predPrices];
 
   const ctx = document.getElementById("chart").getContext("2d");
   if (window.myChart) window.myChart.destroy();
@@ -54,37 +61,19 @@ async function loadChart() {
   window.myChart = new Chart(ctx, {
     type: "line",
     data: {
-      labels: labels,
+      labels,
       datasets: [
-        {
-          label: "History / Actual",
-          data: histPrices,
-          borderColor: "blue",
-          tension: 0.2,
-          pointRadius: 0
-        },
-        {
-          label: "Prediction (next trading days)",
-          data: predSeries,
-          borderColor: "red",
-          borderDash: [6,6],
-          tension: 0.2,
-          pointRadius: 0
-        }
+        { label: "History / Actual", data: histSeries, borderColor: "blue", tension: 0.2, pointRadius: 0 },
+        { label: "Prediction (next trading days)", data: predSeries, borderColor: "red", borderDash: [6,6], tension: 0.2, pointRadius: 0 }
       ]
     },
-    options: {
-      responsive: true,
-      interaction: { intersect: false, mode: "index" }
-    }
+    options: { responsive: true, interaction: { intersect: false, mode: "index" } }
   });
 
-  status.innerText = `Selesai. (${symbol})`;
+  status.innerText = `Selesai. (${symbol}) | Hist: ${histPrices.length} hari | Pred: ${predPrices.length} hari`;
 }
 
 loadChart();
-
-// Auto refresh tiap 15 menit (real-time versi sederhana)
 setInterval(loadChart, 15 * 60 * 1000);
 </script>
 </body>
