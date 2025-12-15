@@ -64,7 +64,7 @@ async function loadChart() {
       labels,
       datasets: [
         { label: "History / Actual", data: histSeries, borderColor: "blue", tension: 0.2, pointRadius: 0 },
-        { label: "Prediction (next trading days)", data: predSeries, borderColor: "red", borderDash: [6,6], tension: 0.2, pointRadius: 0 }
+        { label: "Prediction (next trading days)", data: predSeries, borderColor: "red", tension: 0.2, pointRadius: 0 }
       ]
     },
     options: { responsive: true, interaction: { intersect: false, mode: "index" } }
