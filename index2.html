@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Stock Forecast Dashboard</title>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Zoom & Pan plugin -->
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1"></script>
+
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    button { cursor: pointer; }
+  </style>
+</head>
+
+<body>
+  <h2>📈 Grafik History dan Prediksi Saham</h2>
+
+  <div class="row">
+    <label>Pilih saham:</label>
+    <select id="symbol">
+      <option value="BBCA">BBCA</option>
+      <option value="BBRI">BBRI</option>
+      <option value="BBNI">BBNI</option>
+      <option value="BMRI">BMRI</option>
+    </select>
+
+    <button onclick="loadChart()">Tampilkan</button>
+    <button onclick="resetZoom()">Reset Zoom</button>
+
+    <small>
+      Zoom: scroll / pinch / drag |
+      Geser: drag kiri–kanan
+    </small>
+  </div>
+
+  <p id="status"></p>
+  <canvas id="chart" height="110"></canvas>
+
+<script>
+const API_BASE = "https://prediksiregresi-production.up.railway.app";
+
+async function safeFetch(url) {
+  const r = await fetch(url, { cache: "no-store" });
+  const text = await r.text();
+  try { return JSON.parse(text); }
+  catch { return { error: "Response bukan JSON: " + text.slice(0, 200) }; }
+}
+
+function resetZoom() {
+  if (window.myChart && window.myChart.resetZoom) {
+    window.myChart.resetZoom();
+  }
+}
+
+async function loadChart() {
+  const status = document.getElementById("status");
+  status.innerText = "Loading data...";
+
+  const symbol = document.getElementById("symbol").value;
+
+  const history = await safeFetch(`${API_BASE}/history/${symbol}`);
+  const prediction = await safeFetch(`${API_BASE}/predict/${symbol}`);
+
+  if (history.error) { status.innerText = "Error history: " + history.error; return; }
+  if (prediction.error) { status.innerText = "Error predict: " + prediction.error; return; }
+
+  const histDates = history.dates;
+  const histPrices = history.close;
+
+  const predDates = prediction.predictions.map(p => p.date);
+  const predPrices = prediction.predictions.map(p => p.predicted_close);
+
+  const labels = [...histDates, ...predDates];
+
+  const histSeries = [...histPrices, ...Array(predPrices.length).fill(null)];
+  const predSeries = [...Array(histPrices.length).fill(null), ...predPrices];
+
+  const ctx = document.getElementById("chart").getContext("2d");
+  if (window.myChart) window.myChart.destroy();
+
+  window.myChart = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        {
+          label: "History / Actual",
+          data: histSeries,
+          borderColor: "blue",
+          tension: 0.2,
+          pointRadius: 0
+        },
+        {
+          label: "Prediction (next trading days)",
+          data: predSeries,
+          borderColor: "red",
+          tension: 0.2,
+          pointRadius: 0
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      interaction: { intersect: false, mode: "index" },
+      plugins: {
+        zoom: {
+          pan: {
+            enabled: true,     // ✅ bisa geser langsung
+            mode: "x"
+          },
+          zoom: {
+            wheel: { enabled: true },
+            pinch: { enabled: true },
+            drag: { enabled: true },
+            mode: "x"
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: {
+            maxRotation: 60,
+            minRotation: 60
+          }
+        }
+      }
+    }
+  });
+
+  status.innerText =
+    `Kode (${symbol}) | History: ${histPrices.length} hari | Prediksi: ${predPrices.length} hari`;
+}
+
+loadChart();
+setInterval(loadChart, 15 * 60 * 1000);
+</script>
+</body>
+</html>
