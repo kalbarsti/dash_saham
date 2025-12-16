@@ -108,18 +108,38 @@ async function loadChart() {
     template: "plotly_white",
     margin: { l: 70, r: 30, t: 90, b: 70 },
 
-    xaxis: {
-      type: "date",
-      range: [rangeStart, rangeEnd],
+xaxis: {
+  type: "date",
 
-      // ✅ INI KUNCINYA: tidak bisa geser/zoom melewati batas ini
-      rangebounds: {
-        min: firstHistDate,
-        max: rangeEnd
-      },
+  // default tampilan awal
+  range: [rangeStart, rangeEnd],
 
-      rangeslider: { visible: true }
-    },
+  // 🔒 kunci supaya tidak bisa melewati prediksi terakhir
+  rangebounds: {
+    min: firstHistDate,
+    max: rangeEnd
+  },
+
+  // ✅ tombol pilihan periode
+  rangeselector: {
+    buttons: [
+      { count: 1, label: "1M", step: "month", stepmode: "backward" },
+      { count: 3, label: "3M", step: "month", stepmode: "backward" },
+      { count: 6, label: "6M", step: "month", stepmode: "backward" },
+      { count: 1, label: "YTD", step: "year", stepmode: "todate" },
+      { count: 1, label: "1Y", step: "year", stepmode: "backward" },
+      { step: "all", label: "All" }
+    ],
+    x: 0,
+    y: 1.15
+  },
+
+  // slider bawah
+  rangeslider: {
+    visible: true
+  }
+},
+
 
     yaxis: { title: "Harga (Close)" },
 
