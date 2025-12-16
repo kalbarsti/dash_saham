@@ -50,4 +50,135 @@ async function safeFetch(url) {
 
 function iso(d) { return d.toISOString().slice(0,10); }
 
-function
+function lastNDaysRange(endDateStr, nDays) {
+  const end = new Date(endDateStr + "T00:00:00");
+  const start = new Date(end);
+  start.setDate(start.getDate() - nDays);
+  return [iso(start), iso(end)];
+}
+
+// ---------- main ----------
+async function loadChart() {
+  const status = document.getElementById("status");
+  const symbol = document.getElementById("symbol").value;
+
+  status.innerText = "Loading data...";
+
+  const history = await safeFetch(`${API_BASE}/history/${symbol}`);
+  const prediction = await safeFetch(`${API_BASE}/predict/${symbol}`);
+
+  if (history.error || prediction.error) {
+    status.innerText = "Gagal memuat data";
+    return;
+  }
+
+  const histDates = history.dates;
+  const histPrices = history.close;
+
+  const predDates = prediction.predictions.map(p => p.date);
+  const predPrices = prediction.predictions.map(p => p.predicted_close);
+
+  // gabungkan axis tanggal
+  const allDates = [...histDates, ...predDates];
+
+  // history + prediksi (dipisah dengan null)
+  const histSeries = [...histPrices, ...Array(predPrices.length).fill(null)];
+  const predSeries = [...Array(histPrices.length).fill(null), ...predPrices];
+
+  // default range: 2 minggu terakhir history → akhir prediksi
+  const lastHistDate = histDates[histDates.length - 1];
+  const [rangeStart] = lastNDaysRange(lastHistDate, DEFAULT_HISTORY_DAYS);
+  const rangeEnd = predDates[predDates.length - 1];
+  const firstHistDate = histDates[0];
+
+  // garis history
+  const traceHistory = {
+    x: allDates,
+    y: histSeries,
+    type: "scatter",
+    mode: "lines",
+    name: "History / Actual",
+    line: { color: "blue", width: 3 }
+  };
+
+  // garis prediksi
+  const tracePred = {
+    x: allDates,
+    y: predSeries,
+    type: "scatter",
+    mode: "lines",
+    name: `Prediksi (${predPrices.length} hari bursa)`,
+    line: { color: "red", width: 4 }
+  };
+
+  // shading area prediksi
+  const shapes = [{
+    type: "rect",
+    xref: "x",
+    yref: "paper",
+    x0: predDates[0],
+    x1: predDates[predDates.length - 1],
+    y0: 0,
+    y1: 1,
+    fillcolor: "rgba(255,0,0,0.08)",
+    line: { width: 0 }
+  }];
+
+  const layout = {
+    template: "plotly_white",
+    margin: { l: 70, r: 30, t: 90, b: 70 },
+    shapes,
+
+    title: { text: `Grafik History + Prediksi (${symbol})`, x: 0.5 },
+
+    xaxis: {
+      type: "date",
+      range: [rangeStart, rangeEnd],
+
+      // kunci agar tidak melewati prediksi terakhir
+      rangebounds: { min: firstHistDate, max: rangeEnd },
+
+      rangeselector: {
+        buttons: [
+          { count: 1, label: "1M", step: "month", stepmode: "backward" },
+          { count: 3, label: "3M", step: "month", stepmode: "backward" },
+          { count: 6, label: "6M", step: "month", stepmode: "backward" },
+          { count: 1, label: "YTD", step: "year", stepmode: "todate" },
+          { count: 1, label: "1Y", step: "year", stepmode: "backward" },
+          { step: "all", label: "All" }
+        ],
+        x: 0,
+        y: 1.12
+      },
+
+      rangeslider: { visible: true }
+    },
+
+    yaxis: { title: "Harga (Close)" },
+
+    legend: {
+      orientation: "h",
+      x: 0.5,
+      xanchor: "center",
+      y: 1.02,
+      yanchor: "bottom"
+    }
+  };
+
+  const config = {
+    responsive: true,
+    scrollZoom: true,
+    displaylogo: false
+  };
+
+  Plotly.newPlot("chart", [traceHistory, tracePred], layout, config);
+
+  status.innerText =
+    `Kode (${symbol}) | History: ${histPrices.length} hari | Prediksi: ${predPrices.length} hari`;
+}
+
+document.getElementById("btnLoad").addEventListener("click", loadChart);
+loadChart();
+</script>
+</body>
+</html>
