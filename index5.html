@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Grafik History & Prediksi Saham</title>
+
+  <!-- Plotly -->
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    #chart { width: 100%; height: 560px; }
+    #status { margin-top: 12px; white-space: pre-line; }
+  </style>
+</head>
+
+<body>
+  <h2>Grafik History dan Prediksi Saham</h2>
+
+  <div class="row">
+    <label>Pilih saham:</label>
+    <select id="symbol">
+      <option value="BBCA">BBCA</option>
+      <option value="BBRI">BBRI</option>
+      <option value="BBNI">BBNI</option>
+      <option value="BMRI">BMRI</option>
+    </select>
+
+    <button id="btnLoad">Tampilkan</button>
+  </div>
+
+  <p id="status"></p>
+  <div id="chart"></div>
+
+<script>
+const API_BASE = "https://prediksiregresi-production.up.railway.app";
+
+// default view: tampilkan 2 minggu terakhir + 1 minggu prediksi ke depan
+const DEFAULT_HISTORY_DAYS = 14;
+
+async function safeFetch(url) {
+  const r = await fetch(url, { cache: "no-store" });
+  const text = await r.text();
+  try { return JSON.parse(text); }
+  catch { return { error: "Response bukan JSON: " + text.slice(0, 200) }; }
+}
+
+function lastNDaysRange(endDateStr, nDays) {
+  const end = new Date(endDateStr + "T00:00:00");
+  const start = new Date(end);
+  start.setDate(start.getDate() - nDays);
+  const iso = d => d.toISOString().slice(0,10);
+  return [iso(start), iso(end)];
+}
+
+async function loadChart() {
+  const status = document.getElementById("status");
+  const symbol = document.getElementById("symbol").value;
+
+  status.innerText = "Loading data...";
+
+  // ambil semua endpoint yang diperlukan
+  const [history, backtest, prediction, metrics] = await Promise.all([
+    safeFetch(`${API_BASE}/history/${symbol}`),
+    safeFetch(`${API_BASE}/backtest/${symbol}`),
+    safeFetch(`${API_BASE}/predict/${symbol}`),
+    safeFetch(`${API_BASE}/metrics/${symbol}`)
+  ]);
+
+  // cek error
+  if (history.error)   { status.innerText = "Error history: " + history.error; return; }
+  if (backtest.error)  { status.innerText = "Error backtest: " + backtest.error; return; }
+  if (prediction.error){ status.innerText = "Error predict: " + prediction.error; return; }
+  if (metrics.error)   { status.innerText = "Error metrics: " + metrics.error; return; }
+
+  // ====== HISTORY (2y) ======
+  const histDates = history.dates;
+  const histPrices = history.close;
+
+  // ====== BACKTEST (±1 bulan terakhir) ======
+  // prediksi sejajar tanggal actualnya
+  const btDates = backtest.dates;
+  const btPredPrices = backtest.predicted_close;
+
+  // ====== FUTURE PRED (7 hari ke depan) ======
+  const futDates = prediction.predictions.map(p => p.date);
+  const futPrices = prediction.predictions.map(p => p.predicted_close);
+
+  // ====== buat series prediksi future yang "nempel" ke ujung history ======
+  // point pertama future biar nyambung: ambil close terakhir sebagai titik awal visual
+  const lastHistDate = histDates[histDates.length - 1];
+  const lastHistClose = histPrices[histPrices.length - 1];
+
+  const futDates2 = [lastHistDate, ...futDates];
+  const futPrices2 = [lastHistClose, ...futPrices];
+
+  // ====== Trace: History ======
+  const traceHistory = {
+    x: histDates,
+    y: histPrices,
+    type: "scatter",
+    mode: "lines",
+    name: "History / Actual",
+    line: { color: "blue", width: 3 }
+  };
+
+  // ====== Trace: Backtest (1 bulan lalu) ======
+  const traceBacktest = {
+    x: btDates,
+    y: btPredPrices,
+    type: "scatter",
+    mode: "lines",
+    name: "Prediksi (1 bulan terakhir)",
+    line: { color: "red", width: 2 }
+  };
+
+  // ====== Trace: Future (7 hari ke depan) ======
+  const traceFuture = {
+    x: futDates2,
+    y: futPrices2,
+    type: "scatter",
+    mode: "lines",
+    name: "Prediksi (7 hari ke depan)",
+    line: { color: "red", width: 4 }
+  };
+
+  // default range: 2 minggu terakhir history + sampai prediksi terakhir
+  const [rangeStart] = lastNDaysRange(lastHistDate, DEFAULT_HISTORY_DAYS);
+  const rangeEnd = futDates[futDates.length - 1];
+
+  const layout = {
+    title: { text: `Grafik History + Backtest + Prediksi (${symbol})`, x: 0.5 },
+    template: "plotly_white",
+    margin: { l: 70, r: 30, t: 90, b: 70 },
+    xaxis: {
+      type: "date",
+      range: [rangeStart, rangeEnd],
+      rangeslider: { visible: true }
+    },
+    yaxis: { title: "Harga (Close)" },
+    legend: {
+      orientation: "h",
+      x: 0.5,
+      xanchor: "center",
+      y: 1.02,
+      yanchor: "bottom"
+    },
+    hovermode: "x unified"
+  };
+
+  const config = {
+    responsive: true,
+    scrollZoom: true,
+    displaylogo: false
+  };
+
+  Plotly.newPlot("chart", [traceHistory, traceBacktest, traceFuture], layout, config);
+
+  // metrics
+  const m = metrics.metrics || {};
+  const mae = (m.mae ?? null);
+  const rmse = (m.rmse ?? null);
+  const mape = (m.mape ?? null);
+
+  status.innerText =
+    `Kode: ${symbol}\n` +
+    `History: ${histPrices.length} hari bursa | Backtest: ${btPredPrices.length} hari | Prediksi future: ${futPrices.length} hari\n` +
+    `MAE: ${mae !== null ? mae.toFixed(2) : "-"} | RMSE: ${rmse !== null ? rmse.toFixed(2) : "-"} | MAPE: ${mape !== null ? mape.toFixed(2) + "%" : "-"}`;
+}
+
+document.getElementById("btnLoad").addEventListener("click", loadChart);
+
+// auto load + refresh
+loadChart();
+setInterval(loadChart, 15 * 60 * 1000);
+</script>
+</body>
+</html>
