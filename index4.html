@@ -5,24 +5,12 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Grafik History dan Prediksi Saham</title>
 
-  <!-- Plotly -->
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      padding: 20px;
-    }
-    .row {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-    #chart {
-      width: 100%;
-      height: 560px;
-    }
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    #chart { width: 100%; height: 560px; }
   </style>
 </head>
 
@@ -49,13 +37,12 @@ const API_BASE = "https://prediksiregresi-production.up.railway.app";
 
 // default view
 const DEFAULT_HISTORY_DAYS = 14; // 2 minggu
-const DEFAULT_PRED_DAYS = 7;     // 1 minggu
 
 async function safeFetch(url) {
   const r = await fetch(url, { cache: "no-store" });
   const text = await r.text();
   try { return JSON.parse(text); }
-  catch { return { error: "Response bukan JSON" }; }
+  catch { return { error: "Response bukan JSON: " + text.slice(0, 200) }; }
 }
 
 function lastNDaysRange(endDateStr, nDays) {
@@ -75,17 +62,19 @@ async function loadChart() {
   const history = await safeFetch(`${API_BASE}/history/${symbol}`);
   const prediction = await safeFetch(`${API_BASE}/predict/${symbol}`);
 
-  if (history.error || prediction.error) {
-    status.innerText = "Gagal memuat data";
-    return;
-  }
+  if (history.error)   { status.innerText = "Error history: " + history.error; return; }
+  if (prediction.error){ status.innerText = "Error predict: " + prediction.error; return; }
 
   const histDates = history.dates;
   const histPrices = history.close;
-  const predDates = prediction.predictions.map(p => p.date);
+
+  const predDates  = prediction.predictions.map(p => p.date);
   const predPrices = prediction.predictions.map(p => p.predicted_close);
 
+  // gabungkan label x
   const allDates = [...histDates, ...predDates];
+
+  // buat series sejajar x
   const histSeries = [...histPrices, ...Array(predPrices.length).fill(null)];
   const predSeries = [...Array(histPrices.length).fill(null), ...predPrices];
 
@@ -103,31 +92,36 @@ async function loadChart() {
     y: predSeries,
     type: "scatter",
     mode: "lines",
-    name: "Prediksi (7 hari bursa)",
+    name: `Prediksi (${predPrices.length} hari bursa)`,
     line: { color: "red", width: 4 }
   };
 
-  const lastHistDate = histDates[histDates.length - 1];
+  const firstHistDate = histDates[0];
+  const lastHistDate  = histDates[histDates.length - 1];
+
+  // default range: 2 minggu terakhir history sampai prediksi terakhir
   const [rangeStart] = lastNDaysRange(lastHistDate, DEFAULT_HISTORY_DAYS);
   const rangeEnd = predDates[predDates.length - 1];
 
   const layout = {
-    title: {
-      text: `Grafik History + Prediksi (${symbol})`,
-      x: 0.5
-    },
+    title: { text: `Grafik History + Prediksi (${symbol})`, x: 0.5 },
     template: "plotly_white",
-    margin: { l: 70, r: 30, t: 100, b: 70 },
+    margin: { l: 70, r: 30, t: 90, b: 70 },
 
     xaxis: {
       type: "date",
       range: [rangeStart, rangeEnd],
+
+      // ✅ INI KUNCINYA: tidak bisa geser/zoom melewati batas ini
+      rangebounds: {
+        min: firstHistDate,
+        max: rangeEnd
+      },
+
       rangeslider: { visible: true }
     },
 
-    yaxis: {
-      title: "Harga (Close)"
-    },
+    yaxis: { title: "Harga (Close)" },
 
     legend: {
       orientation: "h",
@@ -135,12 +129,14 @@ async function loadChart() {
       xanchor: "center",
       y: 1.02,
       yanchor: "bottom"
-    }
+    },
+
+    hovermode: "x unified"
   };
 
   const config = {
     responsive: true,
-    scrollZoom: true,   // zoom pakai scroll
+    scrollZoom: true,
     displaylogo: false
   };
 
@@ -151,8 +147,6 @@ async function loadChart() {
 }
 
 document.getElementById("btnLoad").addEventListener("click", loadChart);
-
-// auto load
 loadChart();
 </script>
 </body>
