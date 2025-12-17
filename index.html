@@ -37,10 +37,10 @@
 <script>
 const API_BASE = "https://prediksiregresi-production.up.railway.app";
 
-// default tampilan
-const DEFAULT_HISTORY_DAYS = 14; // 2 minggu
+// default tampilan awal default
+const DEFAULT_HISTORY_DAYS = 14;
 
-// ---------- helpers ----------
+// bantuan
 async function safeFetch(url) {
   const r = await fetch(url, { cache: "no-store" });
   const text = await r.text();
@@ -57,7 +57,7 @@ function lastNDaysRange(endDateStr, nDays) {
   return [iso(start), iso(end)];
 }
 
-// ---------- main ----------
+// main
 async function loadChart() {
   const status = document.getElementById("status");
   const symbol = document.getElementById("symbol").value;
@@ -78,14 +78,14 @@ async function loadChart() {
   const predDates = prediction.predictions.map(p => p.date);
   const predPrices = prediction.predictions.map(p => p.predicted_close);
 
-  // gabungkan axis tanggal
+  // menggabungkan axis tanggal
   const allDates = [...histDates, ...predDates];
 
-  // history + prediksi (dipisah dengan null)
+  // history dan prediksi, pisahkan dengan null
   const histSeries = [...histPrices, ...Array(predPrices.length).fill(null)];
   const predSeries = [...Array(histPrices.length).fill(null), ...predPrices];
 
-  // default range: 2 minggu terakhir history → akhir prediksi
+  // default range adalah 2 minggu terakhir history dan akhir prediksi
   const lastHistDate = histDates[histDates.length - 1];
   const [rangeStart] = lastNDaysRange(lastHistDate, DEFAULT_HISTORY_DAYS);
   const rangeEnd = predDates[predDates.length - 1];
@@ -111,7 +111,7 @@ async function loadChart() {
     line: { color: "red", width: 4 }
   };
 
-  // shading area prediksi
+  // shading untuk area prediksi
   const shapes = [{
     type: "rect",
     xref: "x",
@@ -135,7 +135,7 @@ async function loadChart() {
       type: "date",
       range: [rangeStart, rangeEnd],
 
-      // kunci agar tidak melewati prediksi terakhir
+      // kunci periode
       rangebounds: { min: firstHistDate, max: rangeEnd },
 
       rangeselector: {
